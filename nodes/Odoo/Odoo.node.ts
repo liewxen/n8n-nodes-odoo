@@ -1,7 +1,6 @@
-import { IExecuteFunctions } from 'n8n-core';
-
 import {
 	IDataObject,
+	IExecuteFunctions,
 	ILoadOptionsFunctions,
 	INodeExecutionData,
 	INodePropertyOptions,
@@ -20,10 +19,16 @@ import {
 	odooGetDBName,
 	odooGetModelFields,
 	odooGetUserID,
-	odooIsAddonInstalled,
 	odooJSONRPCRequest,
 	odooUpdate,
-	odooWorkflow,
+	odooSearch,
+	odooSearchCount,
+	odooCopy,
+	odooExists,
+	odooNameGet,
+	odooNameSearch,
+	odooCheckAccessRights,
+	odooReadGroup,
 	processNameValueFields,
 } from './GenericFunctions';
 import { resourceDescription, resourceOperations } from './ResourceDescription';
@@ -206,39 +211,69 @@ export class Odoo implements INodeType {
 					{
 						name: 'Create',
 						value: 'create',
-						description: 'Create a new item',
+						description: 'Create a new record',
 					},
 					{
-						name: 'Delete',
-						value: 'delete',
-						description: 'Delete an item',
-					},
-					{
-						name: 'Get',
+						name: 'Read',
 						value: 'get',
-						description: 'Get an item',
-					},
-					{
-						name: 'Get Many',
-						value: 'getAll',
-						description: 'Get all items',
+						description: 'Read a specific record by ID',
 					},
 					{
 						name: 'Update',
 						value: 'update',
-						description: 'Update an item',
+						description: 'Update an existing record',
+					},
+					{
+						name: 'Delete',
+						value: 'delete',
+						description: 'Delete a record',
+					},
+					{
+						name: 'Search',
+						value: 'search',
+						description: 'Search for record IDs matching criteria',
+					},
+					{
+						name: 'Get Many',
+						value: 'getAll',
+						description: 'Search and read records matching criteria',
+					},
+					{
+						name: 'Search Count',
+						value: 'searchCount',
+						description: 'Count records matching search criteria',
+					},
+					{
+						name: 'Copy',
+						value: 'copy',
+						description: 'Duplicate an existing record',
+					},
+					{
+						name: 'Exists',
+						value: 'exists',
+						description: 'Check if a record exists',
+					},
+					{
+						name: 'Name Get',
+						value: 'nameGet',
+						description: 'Get display names for record IDs',
+					},
+					{
+						name: 'Name Search',
+						value: 'nameSearch',
+						description: 'Search records by name/display text',
+					},
+					{
+						name: 'Read Group',
+						value: 'readGroup',
+						description: 'Read grouped and aggregated data',
+					},
+					{
+						name: 'Check Access Rights',
+						value: 'checkAccessRights',
+						description: 'Check user access rights for operations',
 					},
 				];
-
-				const installed = await odooIsAddonInstalled.call(this);
-
-				if (installed) {
-					operations.push({
-						name: 'Workflow',
-						value: 'workflow',
-						description: 'Trigger a workflow action',
-					});
-				}
 
 				return operations;
 			},
@@ -364,18 +399,149 @@ export class Odoo implements INodeType {
 					);
 				}
 
-				if (operation === 'workflow') {
-					const id = this.getNodeParameter('id', i) as string;
-					const customOperation = this.getNodeParameter('customOperation', i) as string;
-					responseData = await odooWorkflow.call(
+				if (operation === 'search') {
+					const filter = this.getNodeParameter('filterRequest', i) as IOdooFilterOperations;
+					const returnAll = this.getNodeParameter('returnAll', i) as boolean;
+					if (returnAll) {
+						responseData = await odooSearch.call(
+							this,
+							db,
+							userID,
+							password,
+							resource,
+							url,
+							filter,
+						);
+					} else {
+						const offset = this.getNodeParameter('offset', i) as number;
+						const limit = this.getNodeParameter('limit', i) as number;
+						responseData = await odooSearch.call(
+							this,
+							db,
+							userID,
+							password,
+							resource,
+							url,
+							filter,
+							offset,
+							limit,
+						);
+					}
+				}
+
+				if (operation === 'searchCount') {
+					const filter = this.getNodeParameter('filterRequest', i) as IOdooFilterOperations;
+					responseData = await odooSearchCount.call(
 						this,
 						db,
 						userID,
 						password,
 						resource,
-						customOperation,
+						url,
+						filter,
+					);
+				}
+
+				if (operation === 'copy') {
+					const id = this.getNodeParameter('id', i) as string;
+					const options = this.getNodeParameter('options', i) as IDataObject;
+					const defaultValues = options.defaultValues as IDataObject;
+					responseData = await odooCopy.call(
+						this,
+						db,
+						userID,
+						password,
+						resource,
 						url,
 						id,
+						defaultValues,
+					);
+				}
+
+				if (operation === 'exists') {
+					const id = this.getNodeParameter('id', i) as string;
+					responseData = await odooExists.call(
+						this,
+						db,
+						userID,
+						password,
+						resource,
+						url,
+						id,
+					);
+				}
+
+				if (operation === 'nameGet') {
+					const ids = this.getNodeParameter('ids', i) as string;
+					const idsArray = ids.split(',').map(id => id.trim());
+					responseData = await odooNameGet.call(
+						this,
+						db,
+						userID,
+						password,
+						resource,
+						url,
+						idsArray,
+					);
+				}
+
+				if (operation === 'nameSearch') {
+					const name = this.getNodeParameter('name', i) as string;
+					const options = this.getNodeParameter('options', i) as IDataObject;
+					const filter = options.filterRequest as IOdooFilterOperations;
+					const limit = options.limit as number || 100;
+					responseData = await odooNameSearch.call(
+						this,
+						db,
+						userID,
+						password,
+						resource,
+						url,
+						name,
+						filter,
+						limit,
+					);
+				}
+
+				if (operation === 'readGroup') {
+					const options = this.getNodeParameter('options', i) as IDataObject;
+					const filter = this.getNodeParameter('filterRequest', i) as IOdooFilterOperations;
+					const fields = (options.fieldsList as IDataObject[]) || [];
+					const groupBy = (options.groupBy as string[]) || [];
+					const offset = (options.offset as number) || 0;
+					const limit = (options.limit as number) || 0;
+					const orderBy = options.orderBy as string;
+					const lazy = (options.lazy as boolean) !== false;
+					responseData = await odooReadGroup.call(
+						this,
+						db,
+						userID,
+						password,
+						resource,
+						url,
+						filter,
+						fields.map(f => f.toString()),
+						groupBy,
+						offset,
+						limit,
+						orderBy,
+						lazy,
+					);
+				}
+
+				if (operation === 'checkAccessRights') {
+					const accessOperation = this.getNodeParameter('accessOperation', i) as 'read' | 'write' | 'create' | 'unlink';
+					const options = this.getNodeParameter('options', i) as IDataObject;
+					const raiseException = (options.raiseException as boolean) || false;
+					responseData = await odooCheckAccessRights.call(
+						this,
+						db,
+						userID,
+						password,
+						resource,
+						url,
+						accessOperation,
+						raiseException,
 					);
 				}
 

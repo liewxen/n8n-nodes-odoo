@@ -1,13 +1,6 @@
 import { OptionsWithUri } from 'request';
 
-import {
-	IExecuteFunctions,
-	IExecuteSingleFunctions,
-	IHookFunctions,
-	ILoadOptionsFunctions,
-} from 'n8n-core';
-
-import { IDataObject, JsonObject, NodeApiError } from 'n8n-workflow';
+import { IDataObject, JsonObject, NodeApiError, IExecuteFunctions, IExecuteSingleFunctions, IHookFunctions, ILoadOptionsFunctions } from 'n8n-workflow';
 
 const serviceJSONRPC = 'object';
 const methodJSONRPC = 'execute';
@@ -18,6 +11,18 @@ export const mapOperationToJSONRPC = {
 	getAll: 'search_read',
 	update: 'write',
 	delete: 'unlink',
+	search: 'search',
+	searchCount: 'search_count',
+	copy: 'copy',
+	exists: 'exists',
+	readGroup: 'read_group',
+	nameGet: 'name_get',
+	nameSearch: 'name_search',
+	fieldsGet: 'fields_get',
+	checkAccessRights: 'check_access_rights',
+	checkAccessRule: 'check_access_rule',
+	importData: 'import_data',
+	exportData: 'export_data',
 };
 
 export const mapOdooResources: { [key: string]: string } = {
@@ -73,7 +78,7 @@ export interface IOdooResponseFields {
 	}>;
 }
 
-type OdooCRUD = 'create' | 'update' | 'delete' | 'get' | 'getAll';
+type OdooOperation = 'create' | 'update' | 'delete' | 'get' | 'getAll' | 'search' | 'searchCount' | 'copy' | 'exists' | 'readGroup' | 'nameGet' | 'nameSearch' | 'fieldsGet' | 'checkAccessRights' | 'checkAccessRule' | 'importData' | 'exportData';
 
 export function odooGetDBName(databaseName: string | undefined, url: string) {
 	if (databaseName) return databaseName;
@@ -122,7 +127,7 @@ export async function odooJSONRPCRequest(
 			json: true,
 		};
 
-		const response = await this.helpers.request!(options);
+		const response = await this.helpers.request!(options as any);
 		if (response.error) {
 			throw new NodeApiError(this.getNode(), response.error.data, {
 				message: response.error.data.message,
@@ -248,7 +253,7 @@ export async function odooCreate(
 	userID: number,
 	password: string,
 	resource: string,
-	operation: OdooCRUD,
+	operation: OdooOperation,
 	url: string,
 	newItem: IDataObject,
 ) {
@@ -284,7 +289,7 @@ export async function odooGet(
 	userID: number,
 	password: string,
 	resource: string,
-	operation: OdooCRUD,
+	operation: OdooOperation,
 	url: string,
 	itemsID: string,
 	fieldsToReturn?: IDataObject[],
@@ -328,7 +333,7 @@ export async function odooGetAll(
 	userID: number,
 	password: string,
 	resource: string,
-	operation: OdooCRUD,
+	operation: OdooOperation,
 	url: string,
 	filters?: IOdooFilterOperations,
 	fieldsToReturn?: IDataObject[],
@@ -370,7 +375,7 @@ export async function odooUpdate(
 	userID: number,
 	password: string,
 	resource: string,
-	operation: OdooCRUD,
+	operation: OdooOperation,
 	url: string,
 	itemsID: string,
 	fieldsToUpdate: IDataObject,
@@ -455,7 +460,7 @@ export async function odooDelete(
 	userID: number,
 	password: string,
 	resource: string,
-	operation: OdooCRUD,
+	operation: OdooOperation,
 	url: string,
 	itemsID: string,
 ) {
@@ -531,6 +536,322 @@ export async function odooGetServerVersion(
 			},
 			id: Math.floor(Math.random() * 100),
 		};
+		const result = await odooJSONRPCRequest.call(this, body, url);
+		return result;
+	} catch (error) {
+		throw new NodeApiError(this.getNode(), error as JsonObject);
+	}
+}
+
+export async function odooSearch(
+	this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	db: string,
+	userID: number,
+	password: string,
+	resource: string,
+	url: string,
+	filters?: IOdooFilterOperations,
+	offset = 0,
+	limit = 0,
+) {
+	try {
+		const body = {
+			jsonrpc: '2.0',
+			method: 'call',
+			params: {
+				service: serviceJSONRPC,
+				method: methodJSONRPC,
+				args: [
+					db,
+					userID,
+					password,
+					mapOdooResources[resource] || resource,
+					mapOperationToJSONRPC['search'],
+					(filters && processFilters(filters)) || [],
+					offset,
+					limit,
+				],
+			},
+			id: Math.floor(Math.random() * 100),
+		};
+
+		const result = await odooJSONRPCRequest.call(this, body, url);
+		return result;
+	} catch (error) {
+		throw new NodeApiError(this.getNode(), error as JsonObject);
+	}
+}
+
+export async function odooSearchCount(
+	this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	db: string,
+	userID: number,
+	password: string,
+	resource: string,
+	url: string,
+	filters?: IOdooFilterOperations,
+) {
+	try {
+		const body = {
+			jsonrpc: '2.0',
+			method: 'call',
+			params: {
+				service: serviceJSONRPC,
+				method: methodJSONRPC,
+				args: [
+					db,
+					userID,
+					password,
+					mapOdooResources[resource] || resource,
+					mapOperationToJSONRPC['searchCount'],
+					(filters && processFilters(filters)) || [],
+				],
+			},
+			id: Math.floor(Math.random() * 100),
+		};
+
+		const result = await odooJSONRPCRequest.call(this, body, url);
+		return result;
+	} catch (error) {
+		throw new NodeApiError(this.getNode(), error as JsonObject);
+	}
+}
+
+export async function odooCopy(
+	this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	db: string,
+	userID: number,
+	password: string,
+	resource: string,
+	url: string,
+	itemsID: string,
+	defaultValues?: IDataObject,
+) {
+	try {
+		if (!/^\d+$/.test(itemsID) || !parseInt(itemsID, 10)) {
+			throw new NodeApiError(this.getNode(), {
+				status: 'Error',
+				message: `Please specify a valid ID: ${itemsID}`,
+			});
+		}
+		const body = {
+			jsonrpc: '2.0',
+			method: 'call',
+			params: {
+				service: serviceJSONRPC,
+				method: methodJSONRPC,
+				args: [
+					db,
+					userID,
+					password,
+					mapOdooResources[resource] || resource,
+					mapOperationToJSONRPC['copy'],
+					+itemsID,
+					defaultValues || {},
+				],
+			},
+			id: Math.floor(Math.random() * 100),
+		};
+
+		const result = await odooJSONRPCRequest.call(this, body, url);
+		return { id: result };
+	} catch (error) {
+		throw new NodeApiError(this.getNode(), error as JsonObject);
+	}
+}
+
+export async function odooExists(
+	this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	db: string,
+	userID: number,
+	password: string,
+	resource: string,
+	url: string,
+	itemsID: string,
+) {
+	try {
+		if (!/^\d+$/.test(itemsID) || !parseInt(itemsID, 10)) {
+			throw new NodeApiError(this.getNode(), {
+				status: 'Error',
+				message: `Please specify a valid ID: ${itemsID}`,
+			});
+		}
+		const body = {
+			jsonrpc: '2.0',
+			method: 'call',
+			params: {
+				service: serviceJSONRPC,
+				method: methodJSONRPC,
+				args: [
+					db,
+					userID,
+					password,
+					mapOdooResources[resource] || resource,
+					mapOperationToJSONRPC['exists'],
+					[+itemsID],
+				],
+			},
+			id: Math.floor(Math.random() * 100),
+		};
+
+		const result = await odooJSONRPCRequest.call(this, body, url);
+		return result;
+	} catch (error) {
+		throw new NodeApiError(this.getNode(), error as JsonObject);
+	}
+}
+
+export async function odooNameGet(
+	this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	db: string,
+	userID: number,
+	password: string,
+	resource: string,
+	url: string,
+	itemsID: string[],
+) {
+	try {
+		const body = {
+			jsonrpc: '2.0',
+			method: 'call',
+			params: {
+				service: serviceJSONRPC,
+				method: methodJSONRPC,
+				args: [
+					db,
+					userID,
+					password,
+					mapOdooResources[resource] || resource,
+					mapOperationToJSONRPC['nameGet'],
+					itemsID.map(id => +id),
+				],
+			},
+			id: Math.floor(Math.random() * 100),
+		};
+
+		const result = await odooJSONRPCRequest.call(this, body, url);
+		return result;
+	} catch (error) {
+		throw new NodeApiError(this.getNode(), error as JsonObject);
+	}
+}
+
+export async function odooNameSearch(
+	this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	db: string,
+	userID: number,
+	password: string,
+	resource: string,
+	url: string,
+	name: string,
+	filters?: IOdooFilterOperations,
+	limit = 100,
+) {
+	try {
+		const body = {
+			jsonrpc: '2.0',
+			method: 'call',
+			params: {
+				service: serviceJSONRPC,
+				method: methodJSONRPC,
+				args: [
+					db,
+					userID,
+					password,
+					mapOdooResources[resource] || resource,
+					mapOperationToJSONRPC['nameSearch'],
+					name,
+					(filters && processFilters(filters)) || [],
+					limit,
+				],
+			},
+			id: Math.floor(Math.random() * 100),
+		};
+
+		const result = await odooJSONRPCRequest.call(this, body, url);
+		return result;
+	} catch (error) {
+		throw new NodeApiError(this.getNode(), error as JsonObject);
+	}
+}
+
+export async function odooCheckAccessRights(
+	this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	db: string,
+	userID: number,
+	password: string,
+	resource: string,
+	url: string,
+	operation: 'read' | 'write' | 'create' | 'unlink',
+	raiseException = false,
+) {
+	try {
+		const body = {
+			jsonrpc: '2.0',
+			method: 'call',
+			params: {
+				service: serviceJSONRPC,
+				method: methodJSONRPC,
+				args: [
+					db,
+					userID,
+					password,
+					mapOdooResources[resource] || resource,
+					mapOperationToJSONRPC['checkAccessRights'],
+					operation,
+					raiseException,
+				],
+			},
+			id: Math.floor(Math.random() * 100),
+		};
+
+		const result = await odooJSONRPCRequest.call(this, body, url);
+		return result;
+	} catch (error) {
+		throw new NodeApiError(this.getNode(), error as JsonObject);
+	}
+}
+
+export async function odooReadGroup(
+	this: IHookFunctions | IExecuteFunctions | IExecuteSingleFunctions | ILoadOptionsFunctions,
+	db: string,
+	userID: number,
+	password: string,
+	resource: string,
+	url: string,
+	filters?: IOdooFilterOperations,
+	fields?: string[],
+	groupBy?: string[],
+	offset = 0,
+	limit = 0,
+	orderBy?: string,
+	lazy = true,
+) {
+	try {
+		const body = {
+			jsonrpc: '2.0',
+			method: 'call',
+			params: {
+				service: serviceJSONRPC,
+				method: methodJSONRPC,
+				args: [
+					db,
+					userID,
+					password,
+					mapOdooResources[resource] || resource,
+					mapOperationToJSONRPC['readGroup'],
+					(filters && processFilters(filters)) || [],
+					fields || [],
+					groupBy || [],
+					offset,
+					limit,
+					orderBy,
+					lazy,
+				],
+			},
+			id: Math.floor(Math.random() * 100),
+		};
+
 		const result = await odooJSONRPCRequest.call(this, body, url);
 		return result;
 	} catch (error) {

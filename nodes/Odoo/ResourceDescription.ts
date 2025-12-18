@@ -21,24 +21,6 @@ export const resourceOperations: INodeProperties[] = [
 			loadOptionsMethod: 'getOperations',
 		},
 	},
-	{
-		displayName: 'Custom Operation',
-		name: 'customOperation',
-		type: 'options',
-		default: '',
-		description:
-			'Trigger any actionable method associated with the resource, such as action_confirm',
-		required: true,
-		typeOptions: {
-			loadOptionsDependsOn: ['resource'],
-			loadOptionsMethod: 'getActions',
-		},
-		displayOptions: {
-			show: {
-				operation: ['workflow'],
-			},
-		},
-	},
 ];
 
 export const resourceDescription: INodeProperties[] = [
@@ -97,7 +79,7 @@ export const resourceDescription: INodeProperties[] = [
 		required: true,
 		displayOptions: {
 			show: {
-				operation: ['get', 'delete'],
+				operation: ['get', 'delete', 'update', 'copy', 'exists'],
 			},
 		},
 	},
@@ -110,7 +92,7 @@ export const resourceDescription: INodeProperties[] = [
 		type: 'boolean',
 		displayOptions: {
 			show: {
-				operation: ['getAll'],
+				operation: ['getAll', 'search'],
 			},
 		},
 		default: false,
@@ -124,7 +106,7 @@ export const resourceDescription: INodeProperties[] = [
 		default: 0,
 		displayOptions: {
 			show: {
-				operation: ['getAll'],
+				operation: ['getAll', 'search'],
 				returnAll: [false],
 			},
 		},
@@ -140,7 +122,7 @@ export const resourceDescription: INodeProperties[] = [
 		default: 50,
 		displayOptions: {
 			show: {
-				operation: ['getAll'],
+				operation: ['getAll', 'search'],
 				returnAll: [false],
 			},
 		},
@@ -158,10 +140,47 @@ export const resourceDescription: INodeProperties[] = [
 		placeholder: 'Add Field',
 		displayOptions: {
 			show: {
-				operation: ['getAll', 'get'],
+				operation: ['getAll', 'get', 'readGroup', 'copy', 'nameSearch', 'checkAccessRights'],
 			},
 		},
 		options: [
+			{
+				displayName: 'Default Values (Copy)',
+				name: 'defaultValues',
+				type: 'fixedCollection',
+				typeOptions: {
+					multipleValues: true,
+				},
+				displayOptions: {
+					show: {
+						'/operation': ['copy'],
+					},
+				},
+				default: {},
+				options: [
+					{
+						name: 'fields',
+						displayName: 'Field',
+						values: [
+							{
+								displayName: 'Field Name',
+								name: 'fieldName',
+								type: 'options',
+								default: '',
+								typeOptions: {
+									loadOptionsMethod: 'getModelFields',
+								},
+							},
+							{
+								displayName: 'Default Value',
+								name: 'fieldValue',
+								type: 'string',
+								default: '',
+							},
+						],
+					},
+				],
+			},
 			{
 				displayName: 'Fields To Include',
 				name: 'fieldsList',
@@ -171,6 +190,74 @@ export const resourceDescription: INodeProperties[] = [
 					loadOptionsMethod: 'getModelFields',
 					loadOptionsDependsOn: ['resource'],
 				},
+			},
+			{
+				displayName: 'Group By Names or IDs',
+				name: 'groupBy',
+				type: 'multiOptions',
+				default: [],
+				displayOptions: {
+					show: {
+						'/operation': ['readGroup'],
+					},
+				},
+				typeOptions: {
+					loadOptionsMethod: 'getModelFields',
+					loadOptionsDependsOn: ['resource'],
+				},
+				description: 'Fields to group by. Choose from the list, or specify IDs using an <a href="https://docs.n8n.io/code/expressions/">expression</a>.',
+			},
+			{
+				displayName: 'Lazy Grouping',
+				name: 'lazy',
+				type: 'boolean',
+				default: true,
+				displayOptions: {
+					show: {
+						'/operation': ['readGroup'],
+					},
+				},
+				description: 'Whether to use lazy grouping',
+			},
+			{
+				displayName: 'Order By',
+				name: 'orderBy',
+				type: 'string',
+				default: '',
+				displayOptions: {
+					show: {
+						'/operation': ['readGroup'],
+					},
+				},
+				description: 'Field to order results by (e.g., "name ASC")',
+			},
+			{
+				displayName: 'Raise Exception',
+				name: 'raiseException',
+				type: 'boolean',
+				default: false,
+				displayOptions: {
+					show: {
+						'/operation': ['checkAccessRights'],
+					},
+				},
+				description: 'Whether to raise an exception if access is denied',
+			},
+			{
+				displayName: 'Search Limit',
+				name: 'limit',
+				type: 'number',
+				default: 50,
+				displayOptions: {
+					show: {
+						'/operation': ['nameSearch'],
+					},
+				},
+				typeOptions: {
+					minValue: 1,
+					maxValue: 1000,
+				},
+				description: 'Max number of results to return',
 			},
 		],
 	},
@@ -187,7 +274,7 @@ export const resourceDescription: INodeProperties[] = [
 		placeholder: 'Add condition',
 		displayOptions: {
 			show: {
-				operation: ['getAll'],
+				operation: ['getAll', 'search', 'searchCount', 'nameSearch', 'readGroup'],
 			},
 		},
 		options: [
@@ -324,19 +411,69 @@ export const resourceDescription: INodeProperties[] = [
 	},
 
 	/* -------------------------------------------------------------------------- */
-	/*                                custom:workflow                             */
+	/*                              New Operations                                */
 	/* -------------------------------------------------------------------------- */
+
+	// Name Get operation - requires comma-separated IDs
 	{
-		displayName: 'ID',
-		name: 'id',
+		displayName: 'IDs',
+		name: 'ids',
 		type: 'string',
-		description: 'The resource ID',
+		description: 'Comma-separated list of record IDs',
 		default: '',
 		required: true,
 		displayOptions: {
 			show: {
-				operation: ['workflow'],
+				operation: ['nameGet'],
 			},
 		},
+	},
+
+	// Name Search operation - requires search term
+	{
+		displayName: 'Search Term',
+		name: 'name',
+		type: 'string',
+		description: 'Text to search for in record names',
+		default: '',
+		required: true,
+		displayOptions: {
+			show: {
+				operation: ['nameSearch'],
+			},
+		},
+	},
+
+	// Check Access Rights - operation type
+	{
+		displayName: 'Access Operation',
+		name: 'accessOperation',
+		type: 'options',
+		description: 'Type of access to check',
+		default: 'read',
+		required: true,
+		displayOptions: {
+			show: {
+				operation: ['checkAccessRights'],
+			},
+		},
+		options: [
+			{
+				name: 'Read',
+				value: 'read',
+			},
+			{
+				name: 'Write',
+				value: 'write',
+			},
+			{
+				name: 'Create',
+				value: 'create',
+			},
+			{
+				name: 'Delete',
+				value: 'unlink',
+			},
+		],
 	},
 ];

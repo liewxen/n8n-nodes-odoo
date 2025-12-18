@@ -19,7 +19,13 @@
 		"declaration": true,
 		"sourceMap": true,
 		"skipLibCheck": true,
+		"skipDefaultLibCheck": true,
 		"outDir": "./dist/"
 	},
-	"include": ["nodes/**/*", "nodes/**/*.json", "package.json"]
+	"include": ["nodes/**/*", "nodes/**/*.json", "package.json"],
+	"exclude": [
+		"node_modules/**/*",
+		"node_modules/@langchain/core/node_modules/zod/**/*",
+		"node_modules/zod/dist/types/v4/**/*"
+	]
 }
